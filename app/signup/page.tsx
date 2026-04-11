@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
+import toast from "react-hot-toast";
 
 export default function SignupPage() {
   const router = useRouter();
 
   const [alias, setAlias] = useState("");
   const [email, setEmail] = useState("");
-  const [campus, setCampus] = useState("");
+  const [campus, setCampus] = useState("VIT AP");
 
   const handleSignup = async () => {
-    if (!email.endsWith("@vit.ac.in")) {
-  alert("Please use your VIT email ID only");
+    if (!email.endsWith("@vitapstudent.ac.in")) {
+      toast.error("Please fill correct VIT email ID", { duration: 2500 });
       return;
     }
 
@@ -33,10 +34,10 @@ export default function SignupPage() {
         createdAt: new Date(),
       });
 
-      alert("Account created! Please login now.");
+      toast.success("Account created! Please login now.", { duration: 2500 });
       router.push("/login");
     } catch (error: any) {
-      alert(error.message);
+      toast.error("Account already exists or signup failed", { duration: 2500 });
     }
   };
 
@@ -62,14 +63,12 @@ export default function SignupPage() {
         <select
           value={campus}
           onChange={(e) => setCampus(e.target.value)}
-          className="w-full p-3 rounded bg-zinc-800"
+          className="w-full p-3 rounded bg-zinc-800 appearance-none text-white border-none outline-none"
         >
-          <option value="">Select Campus</option>
-          <option value="VIT-AP">VIT-AP</option>
-          <option value="VIT-Vellore">VIT-Vellore</option>
-          <option value="VIT-Chennai">VIT-Chennai</option>
-          <option value="VIT-Bhopal">VIT-Bhopal</option>
+          <option value="VIT AP">VIT AP (Andhra Pradesh)</option>
         </select>
+
+
 
         <button
           onClick={handleSignup}

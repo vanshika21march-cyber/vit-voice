@@ -17,7 +17,6 @@ export default function LoginPage() {
 
   const [alias, setAlias] = useState("");
   const [email, setEmail] = useState("");
-  const [campus, setCampus] = useState("");
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-6">
@@ -43,24 +42,20 @@ export default function LoginPage() {
         />
 
         <select
-          value={campus}
-          onChange={(e) => setCampus(e.target.value)}
-          className="w-full mb-6 px-4 py-2 rounded bg-zinc-800 outline-none"
+          disabled
+          className="w-full mb-4 p-3 rounded bg-zinc-800 appearance-none text-gray-400 border-none outline-none cursor-not-allowed opacity-80"
         >
-          <option value="">Select Campus</option>
-          <option>VIT-AP</option>
-          <option>VIT Vellore</option>
-          <option>VIT Chennai</option>
-          <option>VIT Bhopal</option>
+          <option>VIT AP (Andhra Pradesh)</option>
         </select>
+
+
 
         
 <button
   onClick={async () => {
     // basic validation
-    if (!email.endsWith("@vit.ac.in")) {
-  toast.error("Please use your VIT email ID only");
-
+    if (!email.endsWith("@vitapstudent.ac.in")) {
+      toast.error("Please fill correct VIT email ID", { duration: 2500 });
       return;
     }
 
@@ -72,9 +67,7 @@ toast.success("Login successful 🎉");
 router.push("/");
 
     } catch (error: any) {
-      toast.error(error.message || "Login failed 😢");
-
-
+      toast.error("Invalid credentials or account not found", { duration: 2500 });
       
       
     }
