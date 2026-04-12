@@ -69,6 +69,13 @@ export default function SignupPage() {
           boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)"
         }}>
 
+        {/* Close button */}
+        <button
+          onClick={() => router.push("/")}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all">
+          ✕
+        </button>
+
         <div className="mb-8">
           <h1 className="text-2xl font-bold mb-2">Create Account 🚀</h1>
           <p className="text-gray-400 text-sm">Join your VIT campus community anonymously.</p>
