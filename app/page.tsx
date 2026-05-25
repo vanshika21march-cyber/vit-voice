@@ -67,7 +67,12 @@ export default function Home() {
         <ThemeToggle />
       </div>
 
-      <></>
+      {/* 💫 Shooting Stars Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="shooting-star top-[15%] right-[20%]" style={{ animationDelay: "0s", animationDuration: "5s" }}></div>
+        <div className="shooting-star top-[40%] right-[10%]" style={{ animationDelay: "2.5s", animationDuration: "4.5s" }}></div>
+        <div className="shooting-star top-[10%] right-[60%]" style={{ animationDelay: "5s", animationDuration: "6s" }}></div>
+      </div>
 
       {/* ✨ 3D Interactive Background */}
       {mounted && <Background3D />}

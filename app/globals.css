@@ -31,3 +31,60 @@ body {
     -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
   }
 }
+
+@keyframes shootingStar {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-1000px) translateY(1000px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+.shooting-star {
+  position: absolute;
+  width: 150px;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%);
+  animation: shootingStar 4s linear infinite;
+  border-radius: 999px;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.8));
+  opacity: 0; /* Base opacity to prevent flash before animation */
+}
+
+.dark .shooting-star {
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%);
+  filter: drop-shadow(0 0 6px rgba(255,255,255,1));
+}
+
+/* Lighter stars for light mode */
+.shooting-star {
+  background: linear-gradient(to right, rgba(0,208,230,0) 0%, rgba(0,208,230,0.8) 100%);
+  filter: drop-shadow(0 0 4px rgba(0,208,230,0.5));
+}
+
+.shooting-star::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 3px;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 1px currentColor;
+}
+.dark .shooting-star::before {
+  background: white;
+  color: white;
+}
+.shooting-star::before {
+  background: #00d0e6;
+  color: #00d0e6;
+}
