@@ -79,9 +79,14 @@ export default function Home() {
         transition={{ duration: 0.8 }}
         className="flex flex-col items-center z-10"
       >
-        <h1 className="text-5xl md:text-7xl font-extrabold text-center mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-blue-500">
-          Problem2Project<span className="text-gray-300 dark:text-gray-700 font-light mx-2">|</span>VIT
-        </h1>
+        <div className="flex flex-col items-center mb-6">
+          <h1 className="text-5xl md:text-7xl font-extrabold text-center tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-blue-500 leading-tight">
+            Problem2Project
+          </h1>
+          <span className="text-sm md:text-base font-bold text-gray-400 dark:text-gray-500 tracking-[0.4em] uppercase mt-1 ml-1">
+            VIT
+          </span>
+        </div>
 
         <p className="text-center text-lg md:text-xl text-gray-500 dark:text-gray-400 mb-12 max-w-2xl font-normal leading-relaxed">
           Turn real student problems into real tech projects. <br className="hidden md:block" /> Team up, build socially, and grow together.
