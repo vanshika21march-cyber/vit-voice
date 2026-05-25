@@ -1,7 +1,7 @@
 <div align="center">
 
-<!-- HERO BANNER -->
-<img width="100%" src="https://capsule-render.vercel.app/api?type=venom&color=0:0f0c29,50:302b63,100:24243e&height=280&section=header&text=Problem2Project&fontSize=72&fontColor=00f5ff&fontAlignY=45&desc=VIT-Voice%20%E2%80%94%20The%20Social%20%26%20Academic%20OS%20for%20VIT%20Students&descSize=18&descAlignY=68&descColor=ffffff&animation=twinkling&stroke=00f5ff&strokeWidth=2"/>
+# 🚀 Problem2Project
+**VIT-Voice — The Social & Academic OS for VIT Students**
 
 <br/>
 
@@ -53,7 +53,7 @@ VIT-Voice operates as two deeply integrated yet visually distinct modes, each wi
 
 > *The pulse of the campus. Intelligence without identity.*
 
-The **social heartbeat** of VIT-Voice, Campus Life Mode is where 18,000+ students connect, vent, and discover — anonymously and fearlessly.
+The **social heartbeat** of VIT-Voice, Campus Life Mode is where students connect, vent, and discover — anonymously and fearlessly.
 
 | Feature | Description |
 |---|---|
@@ -272,13 +272,10 @@ Please read `CONTRIBUTING.md` before submitting a PR.
 
 <br/>
 
-**Built with obsession at VIT Vellore.**
+**Built with obsession by students.**
 
 *Every great product starts with a problem.*
-*This one started with 18,000 of them.*
 
 <br/>
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f0c29,100:00f5ff&height=100&section=footer&reversal=false"/>
 
 </div>
