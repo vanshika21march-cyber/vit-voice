@@ -2114,7 +2114,10 @@ export default function CampusPage() {
                     type="number"
                     min="1"
                     value={maxAttendees || ""}
-                    onChange={(e) => setMaxAttendees(e.target.value ? parseInt(e.target.value) : null)}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setMaxAttendees(isNaN(val) ? null : Math.max(1, val));
+                    }}
                     placeholder="∞"
                     className="w-16 h-10 bg-black border border-zinc-800 rounded-lg text-center text-sm text-pink-500 font-bold outline-none focus:border-pink-500"
                   />
