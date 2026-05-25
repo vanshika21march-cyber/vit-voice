@@ -21,20 +21,32 @@ import { auth, db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, uploadString, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Settings, Plus, X, MessageCircle, Zap, ThumbsUp, Users, AlertCircle, ArrowRight, Phone, Video, MoreVertical, Send, Paperclip, Maximize2, Minimize2, LogOut, CalendarIcon, CalendarPlus, Sparkles, Reply, Trash2, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Search, Bell, Settings, Plus, X, MessageCircle, Zap, ThumbsUp, Users, AlertCircle, ArrowRight, Phone, Video, MoreVertical, Send, Paperclip, Maximize2, Minimize2, LogOut, CalendarIcon, CalendarPlus, Sparkles, Reply, Trash2, ChevronDown, Menu, Building2, Utensils, Car, Brain, Book, Laptop, Palette, Trophy, Flame, Medal, Briefcase, FileText, TrendingUp, HeartPulse, Pin, ChevronRight, MapPin, CheckCircle2 } from "lucide-react";
 
 const CATEGORIES = [
-  { name: "All Problems", icon: "🔥", count: 0 },
-  { name: "Hall of Fame", icon: "🏆", count: 0 },
-  { name: "Hostel", icon: "⛺", count: 0 },
-  { name: "Food", icon: "🍕", count: 0 },
-  { name: "Transport", icon: "🚌", count: 0 },
-  { name: "Mental Health", icon: "🧠", count: 15 },
-  { name: "Academics", icon: "📚", count: 23 },
-  { name: "Sports", icon: "⚽", count: 7 },
-  { name: "Tech Issues", icon: "💻", count: 9 },
-  { name: "Events", icon: "🎨", count: 11 },
+  { name: "All Problems", icon: Flame, count: 0, glow: "hover:text-orange-500" },
+  { name: "Hall of Fame", icon: Trophy, count: 0, glow: "hover:text-yellow-500" },
+  { name: "Hostel", icon: Building2, count: 0, glow: "hover:text-cyan-500" },
+  { name: "Food", icon: Utensils, count: 0, glow: "hover:text-pink-500" },
+  { name: "Transport", icon: Car, count: 0, glow: "hover:text-blue-500" },
+  { name: "Mental Health", icon: Brain, count: 15, glow: "hover:text-purple-500" },
+  { name: "Academics", icon: Book, count: 23, glow: "hover:text-green-500" },
+  { name: "Sports", icon: Medal, count: 7, glow: "hover:text-red-500" },
+  { name: "Tech Issues", icon: Laptop, count: 9, glow: "hover:text-indigo-500" },
+  { name: "Events", icon: Palette, count: 11, glow: "hover:text-rose-500" },
 ];
+
+function CategoryIcon({ icon: Icon, isActive, glow }: { icon: any, isActive: boolean, glow: string }) {
+  return (
+    <div className={`relative transition-all duration-300 ${isActive ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-gray-500 group-hover:scale-110 ' + glow}`}>
+      <Icon className={`w-4 h-4 transition-all duration-500 ${isActive ? 'stroke-[2.5px]' : 'stroke-[1.5px] group-hover:stroke-[2px]'}`} />
+      {isActive && (
+        <div className="absolute inset-0 blur-sm opacity-50 bg-current rounded-full" />
+      )}
+    </div>
+  );
+}
 
 export default function CampusPage() {
   const router = useRouter();
@@ -48,9 +60,16 @@ export default function CampusPage() {
   const [userId, setUserId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [guidedStep, setGuidedStep] = useState(1); // 1: Title/Category, 2: Details/Audience, 3: Help Needed
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("All Problems");
   const [newPostCategory, setNewPostCategory] = useState("Other");
+  const [audience, setAudience] = useState("");
+  const [helpNeeded, setHelpNeeded] = useState<"developer" | "designer" | "both">("developer");
+  const [similarProblems, setSimilarProblems] = useState<any[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMemberListOpen, setIsMemberListOpen] = useState(false);
+  const [isProblemVisible, setIsProblemVisible] = useState(false);
 
   const [isSolutionModalOpen, setIsSolutionModalOpen] = useState(false);
   const [problemToSolve, setProblemToSolve] = useState<{id: string, alias: string} | null>(null);
@@ -104,11 +123,15 @@ export default function CampusPage() {
 
   // Meetup State
   const [isMeetupModalOpen, setIsMeetupModalOpen] = useState(false);
+  const [meetupTitle, setMeetupTitle] = useState("");
   const [meetupDate, setMeetupDate] = useState("");
   const [meetupTime, setMeetupTime] = useState("");
   const [meetupLocation, setMeetupLocation] = useState("");
+  const [maxAttendees, setMaxAttendees] = useState<number | null>(null);
+  const [meetupProblemId, setMeetupProblemId] = useState("");
   const [meetups, setMeetups] = useState<any[]>([]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [meetupTab, setMeetupTab] = useState<'upcoming' | 'past'>('upcoming');
 
   // AI Summarizer State
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -232,6 +255,17 @@ export default function CampusPage() {
     return () => unsubscribe();
   }, [activeChat]);
 
+  // Cleanup effect for uploads
+  useEffect(() => {
+    if (!activeChat) {
+      setIsUploading(false);
+      setPendingAttachment(null);
+      toast.dismiss("upload-campus");
+    }
+  }, [activeChat]);
+
+
+
   // Fetch Meetups
   useEffect(() => {
     if (!campus) return;
@@ -274,11 +308,24 @@ export default function CampusPage() {
 
     try {
       const docRef = doc(db, "campusProblems", id);
+      const newVotes = currentVotes + 1;
 
       await updateDoc(docRef, {
         votes: increment(1),
         upvotedBy: [...upvotedBy, userId],
       });
+
+      if (newVotes === 10) {
+        toast("🔥 This problem is trending! Be the first to solve it.", {
+          duration: 5000,
+          icon: "🚀",
+          style: {
+            background: "#111",
+            color: "#fff",
+            border: "1px solid #00d0e6"
+          }
+        });
+      }
 
       toast.success("Upvoted 🔥");
     } catch (error: any) {
@@ -308,6 +355,13 @@ export default function CampusPage() {
 
       await updateDoc(docRef, {
         workingBy: [...workingBy, userId],
+      });
+
+      // Send System Message
+      await addDoc(collection(db, "campusProblems", problem.id, "messages"), {
+        text: `${alias} joined to work on this problem`,
+        type: "system",
+        createdAt: serverTimestamp(),
       });
 
       toast.success("Joined Group! 🚀");
@@ -341,6 +395,8 @@ export default function CampusPage() {
         status: "solved",
         solution: solutionText.trim(),
         solvedAt: serverTimestamp(),
+        solverId: userId,
+        solverAlias: alias,
       });
       toast.success("Problem marked as solved! Added to Hall of Fame 🏆");
       setIsSolutionModalOpen(false);
@@ -352,30 +408,79 @@ export default function CampusPage() {
   };
 
   const handleScheduleMeetup = async () => {
-    if (!activeChat || !userId) return;
-    if (!meetupDate) { toast.error("Please specify a Date for the meetup!"); return; }
-    if (!meetupTime) { toast.error("Please specify a Time for the meetup!"); return; }
-    if (!meetupLocation.trim()) { toast.error("Please specify a Location!"); return; }
-
+    if (!userId) return;
+    if (!meetupTitle.trim()) { toast.error("Please give your meetup a title!"); return; }
+    if (!meetupProblemId) { toast.error("Please link this meetup to a problem!"); return; }
+    if (!meetupDate) { toast.error("Please specify a Date!"); return; }
+    if (!meetupTime) { toast.error("Please specify a Time!"); return; }
+    if (maxAttendees !== null && maxAttendees <= 0) { toast.error("Please enter a positive number of people!"); return; }
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (meetupDate < today) { toast.error("Cannot schedule in the past!"); return; }
+    if (meetupDate === today) {
+      const currentTime = new Date().toTimeString().slice(0, 5);
+      if (meetupTime < currentTime) { toast.error("Cannot schedule in the past time!"); return; }
+    }
+    
+    const problem = problems.find(p => p.id === meetupProblemId);
+    
     try {
       await addDoc(collection(db, "meetups"), {
-        problemId: activeChat.id,
-        problemTitle: activeChat.title,
-        campus: activeChat.campus || campus,
+        title: meetupTitle.trim(),
+        problemId: meetupProblemId,
+        problemTitle: problem?.title || "Unknown Problem",
+        category: problem?.category || "Misc",
+        campus: campus,
         creatorId: userId,
         creatorAlias: alias,
         date: meetupDate,
         time: meetupTime,
-        location: meetupLocation,
+        location: meetupLocation || "TBD",
+        maxAttendees: maxAttendees,
+        attendees: [userId],
         createdAt: serverTimestamp(),
       });
       toast.success("Meetup Scheduled! 📅");
       setIsMeetupModalOpen(false);
+      setMeetupTitle("");
       setMeetupDate("");
       setMeetupTime("");
       setMeetupLocation("");
+      setMaxAttendees(null);
     } catch (err: any) {
-      toast.error("Failed to schedule meetup: " + err.message);
+      toast.error("Failed to schedule: " + err.message);
+    }
+  };
+
+  const handleJoinMeetup = async (meetupId: string, currentAttendees: string[] = []) => {
+    if (!userId) { toast.error("Please login 😅"); return; }
+    try {
+      const docRef = doc(db, "meetups", meetupId);
+      if (currentAttendees.includes(userId)) {
+        await updateDoc(docRef, { attendees: currentAttendees.filter(id => id !== userId) });
+        toast.success("Left meetup");
+      } else {
+        const meetup = meetups.find(m => m.id === meetupId);
+        if (meetup?.maxAttendees && currentAttendees.length >= meetup.maxAttendees) {
+          toast.error("This meetup is full! 😅");
+          return;
+        }
+        await updateDoc(docRef, { attendees: [...currentAttendees, userId] });
+        toast.success("Joined meetup! 🚀");
+      }
+    } catch (e: any) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handlePostOutcome = async (meetupId: string, text: string) => {
+    if (!text.trim()) return;
+    try {
+      const docRef = doc(db, "meetups", meetupId);
+      await updateDoc(docRef, { outcome: text.trim() });
+      toast.success("Outcome archived! 🚀");
+    } catch (e) {
+      toast.error("Failed to archive outcome");
     }
   };
 
@@ -498,11 +603,15 @@ export default function CampusPage() {
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      toast.error("Please provide a problem title! 😅");
+      toast.error("Please provide a concise title! 😅");
       return;
     }
-    if (!description.trim()) {
-      toast.error("Please explain your problem in the description! 😅");
+    if (description.trim().length < 80) {
+      toast.error("Please describe the problem in more detail (min 80 chars)! 📝");
+      return;
+    }
+    if (!audience.trim()) {
+      toast.error("Who does this affect? (e.g. 1st years, Hostellers)");
       return;
     }
 
@@ -544,6 +653,7 @@ export default function CampusPage() {
       setIsModalOpen(false);
       setTitle("");
       setDescription("");
+      setAudience("");
       setNewPostCategory("Other");
       return;
     }
@@ -567,23 +677,24 @@ export default function CampusPage() {
       await addDoc(problemsRef, {
         title: title.trim(),
         description,
+        audience: audience.trim(),
+        helpNeeded,
         category: newPostCategory,
         campus,
         alias,
+        creatorId: userId,
         votes: 1,
         status: "open",
         upvotedBy: [userId],
-        workingBy: [],
         createdAt: serverTimestamp(),
-        messageCount: 0,
       });
 
-      toast.success(`Posted in ${newPostCategory} ✨`);
-
+      toast.success("New Problem Posted! Use group chat to fix it. 🚀");
+      setIsModalOpen(false);
       setTitle("");
       setDescription("");
+      setAudience("");
       setNewPostCategory("Other");
-      setIsModalOpen(false);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -739,31 +850,38 @@ export default function CampusPage() {
       toast.loading("Uploading...", { id: "upload-campus" });
 
       const storageRef = ref(storage, `chat_uploads/${Date.now()}_${file.name}`);
-      
-      // Simulate progress for UX since uploadBytes doesn't support native progress events
-      // and uploadBytesResumable gets blocked by strict campus firewalls (PUT requests)
-      let simulatedProgress = 0;
-      const progressInterval = setInterval(() => {
-        simulatedProgress += (90 - simulatedProgress) * 0.1; // Smoothly approach 90%
-        setPendingAttachment((prev) => (prev ? { ...prev, progress: simulatedProgress } : null));
-      }, 500);
+      const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
 
-      // Simple POST upload that bypasses strict firewalls
-      await uploadBytes(storageRef, fileToUpload);
-      
-      clearInterval(progressInterval);
-      setPendingAttachment((prev) => (prev ? { ...prev, progress: 100 } : null));
-      
-      const downloadURL = await getDownloadURL(storageRef);
-      setPendingAttachment((prev) =>
-        prev ? { ...prev, url: downloadURL } : null
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setPendingAttachment((prev) => (prev ? { ...prev, progress } : null));
+        }, 
+        (err) => {
+          console.error("Upload error:", err);
+          toast.error("Upload failed", { id: "upload-campus" });
+          setPendingAttachment(null);
+          setIsUploading(false);
+        }, 
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            setPendingAttachment((prev) =>
+              prev ? { ...prev, url: downloadURL, progress: 100 } : null
+            );
+            setIsUploading(false);
+            toast.dismiss("upload-campus");
+            toast.success("Ready to send!", { id: "upload-campus-success", duration: 2000 });
+          } catch (error) {
+            console.error("Post-upload error:", error);
+            setIsUploading(false);
+            setPendingAttachment(null);
+            toast.error("Finalizing upload failed", { id: "upload-campus" });
+          }
+        }
       );
-      
-      setIsUploading(false);
-      toast.dismiss("upload-campus");
-
     } catch (err) {
-      console.error("Processing error:", err); // 👈 ADD THIS too
+      console.error("Processing error:", err);
       toast.error("Processing failed", { id: "upload-campus" });
       setPendingAttachment(null);
       setIsUploading(false);
@@ -799,14 +917,30 @@ export default function CampusPage() {
 
   return (
     <div className="h-screen overflow-hidden bg-[#060606] text-gray-200 font-sans flex flex-col relative w-full">
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
+
       {/* Top Header */}
-      <header className="h-[72px] bg-[#0a0a0a] border-b border-zinc-900 flex items-center justify-between px-6 sticky top-0 z-10 shrink-0">
-        <div className="flex flex-col">
-          <h1 className="text-[22px] font-bold text-white tracking-tight leading-tight">Campus Life Mode</h1>
-          <span className="text-xs text-gray-400">Collaborate & solve problems together</span>
+      <header className="h-[72px] bg-[#0a0a0a] border-b border-zinc-900 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40 shrink-0">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="p-2 hover:bg-zinc-800 rounded-lg text-gray-400 lg:hidden transition-colors"
+          >
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+          <div className="flex flex-col">
+            <h1 className="text-xl sm:text-[22px] font-bold text-white tracking-tight leading-tight">Campus Life Mode</h1>
+            <span className="text-[10px] sm:text-xs text-gray-400">Collaborate & solve problems together</span>
+          </div>
         </div>
 
-        <div className="flex-1 max-w-xl mx-8 hidden md:block relative">
+        <div className="flex-1 max-w-xl mx-4 sm:mx-8 hidden md:block relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
           <input
             type="text"
@@ -815,16 +949,13 @@ export default function CampusPage() {
           />
         </div>
 
-        <div className="flex items-center gap-6">
-          <button className="relative text-gray-400 hover:text-white transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-pink-500 rounded-full border border-[#0a0a0a]"></span>
-          </button>
-          <button onClick={() => setIsSettingsOpen(true)} className="text-gray-400 hover:text-white transition-colors">
+        <div className="flex items-center gap-3 sm:gap-6">
+
+          <button onClick={() => setIsSettingsOpen(true)} className="text-gray-400 hover:text-white transition-colors hidden sm:block">
             <Settings className="w-5 h-5" />
           </button>
 
-          <div onClick={() => setIsProfileOpen(true)} className="flex items-center gap-3 border-l border-zinc-800 pl-6 cursor-pointer hover:opacity-80 transition">
+          <Link href={`/profile/${userId}`} className="flex items-center gap-3 border-l-0 sm:border-l border-zinc-800 pl-3 sm:pl-6 cursor-pointer hover:opacity-80 transition">
             <div className="w-9 h-9 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-sm">
               {alias ? alias.charAt(0).toUpperCase() : "U"}
             </div>
@@ -834,7 +965,7 @@ export default function CampusPage() {
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Online
               </span>
             </div>
-          </div>
+          </Link>
         </div>
       </header>
 
@@ -842,11 +973,11 @@ export default function CampusPage() {
       <div className="flex flex-1 overflow-hidden h-[calc(100vh-72px)] relative">
 
         {/* Left Sidebar */}
-        <aside className="w-[260px] bg-[#0a0a0a] border-r border-zinc-900 flex flex-col overflow-y-auto shrink-0 z-0">
+        <aside className={`${isMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} fixed lg:relative top-[72px] lg:top-0 left-0 w-[260px] h-[calc(100vh-72px)] bg-[#0a0a0a] border-r border-zinc-900 flex flex-col overflow-y-auto shrink-0 z-40 transition-transform duration-300`}>
           <div className="p-5">
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="w-full bg-[#f01c7d] hover:bg-[#d81970] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-pink-900/10 text-sm"
+              onClick={() => { setIsModalOpen(true); setIsMenuOpen(false); setGuidedStep(1); }}
+              className="w-full bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:from-[#d81970] hover:to-[#6d28d9] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-900/20 text-sm hover:-translate-y-0.5"
             >
               <Plus className="w-4 h-4" />
               Post a Problem
@@ -869,21 +1000,36 @@ export default function CampusPage() {
                     key={cat.name}
                     onClick={() => setSelectedCategory(cat.name)}
                     className={`group flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${isActive
-                      ? "border border-cyan-500/30 bg-cyan-500/5 text-white"
-                      : "border border-transparent text-gray-300 hover:bg-zinc-900"
+                      ? "border border-cyan-500/30 bg-cyan-500/10 text-white shadow-[0_0_15px_rgba(0,208,230,0.1)]"
+                      : "border border-transparent text-gray-300 hover:bg-zinc-900/50 hover:text-white"
                       }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-lg">{cat.icon}</span>
+                      <CategoryIcon icon={cat.icon} isActive={isActive} glow={cat.glow} />
                       <span className={`text-sm font-medium ${isActive ? 'text-white' : 'group-hover:text-white'}`}>
                         {cat.name}
                       </span>
                     </div>
                     {(count > 0 || cat.name === "All Problems") && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-zinc-800 text-gray-400'
-                        }`}>
-                        {count || cat.count}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                          cat.name === "All Problems" ? "bg-orange-500" :
+                          cat.name === "Hall of Fame" ? "bg-yellow-500" :
+                          cat.name === "Hostel" ? "bg-cyan-500" :
+                          cat.name === "Food" ? "bg-pink-500" :
+                          cat.name === "Transport" ? "bg-blue-500" :
+                          cat.name === "Mental Health" ? "bg-purple-500" :
+                          cat.name === "Academics" ? "bg-green-500" :
+                          cat.name === "Sports" ? "bg-red-500" :
+                          cat.name === "Tech Issues" ? "bg-indigo-500" :
+                          cat.name === "Events" ? "bg-rose-500" :
+                          "bg-zinc-500"
+                        }`} />
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-zinc-800 text-gray-400'
+                          }`}>
+                          {count || cat.count}
+                        </span>
+                      </div>
                     )}
                   </button>
                 )
@@ -916,7 +1062,7 @@ export default function CampusPage() {
                     disabled={isDashboardSummarizing}
                     className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition border border-zinc-700"
                   >
-                    {isDashboardSummarizing ? "Summarizing..." : "Generate TL;DR"}
+                    {isDashboardSummarizing ? "Summarizing..." : "Summarize"}
                   </button>
                 </div>
 
@@ -941,63 +1087,121 @@ export default function CampusPage() {
               </div>
             )}
 
+            {/* Weekly Leaderboard */}
+            {selectedCategory === "Hall of Fame" && (
+              <div className="bg-[#111111] border border-green-500/20 rounded-2xl p-5 mb-6 shadow-xl shadow-green-500/5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <span className="text-xl">🏆</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">Top Builders This Week</h3>
+                    <p className="text-[11px] text-gray-400 font-medium">Problem solving Hall of Fame</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(() => {
+                    const solverCounts: Record<string, { count: number, name: string }> = {};
+                    problems.filter(p => p.status === 'solved' && p.solverId).forEach(p => {
+                      if (!solverCounts[p.solverId]) solverCounts[p.solverId] = { count: 0, name: p.solverAlias || 'Unknown' };
+                      solverCounts[p.solverId].count++;
+                    });
+                    const topSolvers = Object.values(solverCounts).sort((a,b) => b.count - a.count).slice(0, 3);
+                    if (topSolvers.length === 0) return <div className="text-xs text-gray-500 italic px-2">No projects built yet this week. Be the first!</div>;
+                    return topSolvers.map((s, i) => (
+                      <div 
+                         key={i} 
+                         onClick={() => router.push(`/profile/${Object.keys(solverCounts).find(key => solverCounts[key] === s)}`)}
+                         className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`font-black text-xs ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : 'text-amber-600'}`}>#{i+1}</span>
+                          <span className="text-sm font-bold text-gray-200">{s.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full border border-green-500/20">
+                            {s.count} SOLVED
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+
             {filteredProblems.length === 0 ? (
-              <div className="text-center py-20 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
+              <div className="flex flex-col items-center justify-center py-20 px-6 border border-dashed border-zinc-800 rounded-3xl bg-zinc-900/10">
                 {selectedCategory === "Hall of Fame" ? (
-                  <>
-                    <p className="text-gray-400 mb-4 text-sm max-w-sm mx-auto">The Hall of Fame is empty. Problems automatically appear here when a group marks them as Solved by building a project!</p>
-                  </>
+                  <div className="text-center">
+                    <span className="text-6xl mb-6 block">🏆</span>
+                    <h3 className="text-xl font-bold text-white mb-2">The Hall of Fame is Empty</h3>
+                    <p className="text-gray-500 mb-4 text-sm max-w-sm mx-auto font-medium">Problems appear here once someone builds a solution and marks them as Solved. Be the first to build something great!</p>
+                  </div>
                 ) : (
-                  <>
-                    <p className="text-gray-400 mb-4">No problems found in "{selectedCategory}".</p>
+                  <div className="text-center">
+                    <span className="text-6xl mb-6 block">🏜️</span>
+                    <h3 className="text-xl font-bold text-white mb-2">It's quiet in here...</h3>
+                    <p className="text-gray-500 mb-6 font-medium">No problems found in "{selectedCategory}".</p>
                     <button
                       onClick={() => setIsModalOpen(true)}
-                      className="text-[#f01c7d] font-medium hover:text-pink-400 transition"
+                      className="px-8 py-3 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] text-white font-extrabold rounded-full shadow-lg shadow-purple-900/20 hover:shadow-cyan-500/10 transition-all hover:-translate-y-1 active:scale-95"
                     >
-                      Be the first to post a problem 🤍
+                      Be the first to post 🤍
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             ) : (
               filteredProblems.map((p: any, index: number) => {
-                // All cards get the cyan top border
-                const topBorderColor = 'border-t-[#00d0e6]';
                 const workingBy = p.workingBy || [];
                 const isWorking = workingBy.includes(userId);
-
                 const initialsArray = getAvatarInitials(workingBy);
 
                 return (
                   <div
                     key={p.id}
-                    className={`bg-[#111111] border-t-[3px] ${topBorderColor} border border-x-zinc-800 border-b-zinc-800 rounded-xl p-5 hover:border-[#00d0e6] shadow-sm hover:shadow-[#00d0e6]/10 transition-all`}
+                    className="bg-[#111111] border border-zinc-800 rounded-xl p-6 hover:-translate-y-1 hover:border-zinc-700 hover:shadow-[0_4px_20px_rgba(0,0,0,0.5)] shadow-sm transition-all duration-300 relative group"
                   >
                     {/* Tags */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-[10px] font-bold text-pink-400 bg-pink-500/10 px-2 py-1 rounded w-fit uppercase tracking-wide">
-                        In Progress
-                      </span>
-                      {['urgent', p.category.toLowerCase().replace(/ /g, ""), 'campus'].slice(0, 3).map(tag => (
-                        <span key={tag} className="text-[11px] font-medium text-[#00d0e6] bg-[#00d0e6]/10 px-2 py-1 rounded w-fit">
+                    <div className="flex items-center flex-wrap gap-2 mb-4">
+                      {p.status === 'solved' ? (
+                         <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded w-fit uppercase tracking-wide border border-cyan-500/20">
+                          ✓ Solved
+                        </span>
+                      ) : (workingBy.length > 0 ? (
+                         <span className="text-[10px] font-bold text-[#f01c7d] bg-[#f01c7d]/10 px-2 py-1 rounded w-fit uppercase tracking-wide border border-[#f01c7d]/20">
+                          In Progress
+                        </span>
+                      ) : (
+                         <span className="text-[10px] font-bold text-cyan-500 bg-cyan-500/10 px-2 py-1 rounded w-fit uppercase tracking-wide border border-cyan-500/20">
+                          Open
+                        </span>
+                      ))}
+
+                      {['campus', p.category.toLowerCase().replace(/ /g, "")].map(tag => (
+                        <span key={tag} className="text-[11px] font-medium text-gray-500 bg-zinc-800/50 px-2 py-1 rounded w-fit border border-zinc-700/50">
                           #{tag}
                         </span>
                       ))}
                     </div>
 
                     {/* Content */}
-                    <h3 className="text-lg font-bold text-white mb-2 leading-snug">
+                    <h3 
+                       onClick={() => router.push(`/profile/${p.creatorId || userId}`)}
+                       className="text-xl font-extrabold text-white mb-2 leading-snug group-hover:text-[#00d0e6] transition-colors cursor-pointer"
+                    >
                       {p.title}
                     </h3>
 
-                    <p className="text-[#a1a1aa] text-sm mb-5 leading-relaxed">
+                    <p className="text-[#a1a1aa] text-[14px] mb-5 leading-relaxed line-clamp-3">
                       {p.description}
                     </p>
 
                     {p.status === "solved" && p.solution && (
-                      <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-5">
-                        <div className="text-[11px] font-bold text-green-400 mb-1.5 uppercase tracking-wider">Solution / Fix:</div>
-                        <div className="text-[13px] text-green-50 leading-relaxed font-medium whitespace-pre-wrap">
+                      <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4 mb-5">
+                        <div className="text-[11px] font-bold text-cyan-400 mb-1.5 uppercase tracking-wider">Solution / Fix:</div>
+                        <div className="text-[13px] text-cyan-50 leading-relaxed font-medium whitespace-pre-wrap">
                           {p.solution.split(/(https?:\/\/[^\s]+)/g).map((part: string, i: number) => 
                             part.match(/https?:\/\//) ? (
                               <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-[#00d0e6] hover:underline underline-offset-4 break-words">
@@ -1051,33 +1255,32 @@ export default function CampusPage() {
                       <div className="flex items-center gap-3">
                         {p.status !== "solved" ? (
                           <>
-                            {p.alias === alias && (
-                              <button
-                                onClick={() => handleOpenSolutionModal(p.id, p.alias)}
-                                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-green-500/20 text-green-500 hover:bg-green-500/10 transition text-xs font-bold"
-                              >
-                                ✅ Mark Solved
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleOpenSolutionModal(p.id, p.alias)}
+                              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-cyan-500/20 text-cyan-500 hover:bg-cyan-500/10 transition text-[11px] font-black uppercase tracking-tight"
+                            >
+                              ✅ Solved
+                            </button>
                             <button
                               onClick={() => handleUpvote(p.id, p.votes, p.upvotedBy || [])}
-                              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-pink-500/20 text-[#f01c7d] hover:bg-pink-500/10 transition text-xs font-bold bg-white"
+                              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition text-[11px] font-black uppercase tracking-tight ${p.votes >= 10 ? 'bg-pink-600 text-white shadow-lg shadow-pink-500/20' : 'border border-pink-500/20 text-[#f01c7d] hover:bg-pink-500/10 bg-zinc-900'}`}
                             >
-                              <ThumbsUp className="w-3.5 h-3.5" /> Upvote
+                              {p.votes >= 10 ? <Zap className="w-3.5 h-3.5 fill-current" /> : <ThumbsUp className="w-3.5 h-3.5" />}
+                              Upvote {p.votes > 0 && <span>{p.votes}</span>}
                             </button>
 
                             <button
                               onClick={() => handleStartWorking(p)}
-                              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition text-xs font-bold relative ${isWorking ? 'bg-[#1a1a1a] text-[#00d0e6] border border-[#00d0e6]/30' : 'bg-[#00d0e6] hover:bg-cyan-400 text-black'}`}
+                              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition text-[11px] font-black uppercase tracking-tight relative ${isWorking ? 'bg-[#1a1a1a] text-[#00d0e6] border border-[#00d0e6]/30 shadow-lg shadow-cyan-500/10' : 'bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:scale-105 active:scale-95 text-white overflow-hidden'}`}
                             >
                               {isWorking ? (
                                 <>
-                                  <MessageCircle className="w-3.5 h-3.5" /> Open Chat
+                                  <MessageCircle className="w-3.5 h-3.5" /> Chat
                                   {(() => {
                                     const unreadCount = (p.messageCount || 0) - (readCounts[p.id] || 0);
                                     if (unreadCount > 0 && activeChat?.id !== p.id) {
                                       return (
-                                        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 font-bold rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
+                                        <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] w-4.5 h-4.5 font-black rounded-full flex items-center justify-center border-2 border-[#111] animate-bounce">
                                           {unreadCount > 9 ? '9+' : unreadCount}
                                         </span>
                                       );
@@ -1087,15 +1290,27 @@ export default function CampusPage() {
                                 </>
                               ) : (
                                 <>
-                                  <Users className="w-3.5 h-3.5" /> Join Group <ArrowRight className="w-3.5 h-3.5" />
+                                  <Users className="w-3.5 h-3.5" /> Join Group
                                 </>
                               )}
                             </button>
                           </>
                         ) : (
-                          <span className="text-xs font-bold text-green-500 flex items-center gap-1.5 bg-green-500/10 px-3 py-1.5 rounded-full">
-                            🏆 Solved by {p.alias}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            {p.solution && (
+                               <a 
+                                 href={p.solution} 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="text-[11px] font-black text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1.5 rounded-full hover:bg-cyan-400/20 transition uppercase tracking-tighter"
+                               >
+                                 View Project
+                               </a>
+                            )}
+                            <span className="text-[11px] font-black text-green-500 flex items-center gap-1.5 bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20 uppercase tracking-tighter">
+                              🏆 Solved
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1165,7 +1380,7 @@ export default function CampusPage() {
                 <div className="text-xs text-gray-500 italic pl-2">No other students found yet.</div>
               ) : (
                 onlineStudentsList.map(student => (
-                  <div key={student.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#111] transition-colors cursor-pointer border border-transparent hover:border-zinc-800/60">
+                  <Link key={student.id} href={`/profile/${student.id}`} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#111] transition-colors cursor-pointer border border-transparent hover:border-zinc-800/60">
                     <div className="relative">
                       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-[11px] font-bold text-gray-300 border border-zinc-600 shadow-sm shrink-0">
                         {student.alias ? student.alias.substring(0, 2).toUpperCase() : "ST"}
@@ -1176,7 +1391,7 @@ export default function CampusPage() {
                       <p className="text-[13px] font-bold text-gray-200 truncate leading-tight">{student.alias}</p>
                       <p className="text-[10px] text-gray-500 truncate mt-0.5">Active</p>
                     </div>
-                  </div>
+                  </Link>
                 ))
               )}
             </div>
@@ -1187,52 +1402,82 @@ export default function CampusPage() {
         {activeChat && (
           <div className={`absolute top-0 right-0 h-full pb-safe ${isChatExpanded ? 'w-full lg:w-[calc(100%-260px)]' : 'w-full sm:w-[400px] lg:w-[450px]'} bg-[#0a0a0a] border-l border-zinc-900 shadow-2xl flex flex-col z-20 transition-all duration-300 transform`}>
             {/* Chat Header */}
-            <div className="h-[72px] border-b border-zinc-900 flex items-center px-4 shrink-0 bg-[#0a0a0a]">
-              <div className="w-10 h-10 rounded-full bg-[#111] flex items-center justify-center text-gray-400 shrink-0">
+            <div className="h-[76px] border-b border-zinc-900 flex items-center px-4 shrink-0 bg-[#0a0a0a] gap-3">
+              <button 
+                onClick={() => setIsMemberListOpen(!isMemberListOpen)}
+                className="w-10 h-10 rounded-full bg-[#111] hover:bg-zinc-800 flex items-center justify-center text-gray-400 shrink-0 transition"
+              >
                 <Users className="w-5 h-5" />
+              </button>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white text-sm truncate">{activeChat.title}</h3>
+                  <button 
+                    onClick={() => setIsProblemVisible(!isProblemVisible)}
+                    className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-gray-400 py-0.5 px-2 rounded-md transition"
+                  >
+                    View Problem
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500 truncate mt-0.5">{activeChat.description}</p>
               </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <h3 className="font-bold text-white text-sm truncate">{activeChat.title}</h3>
-                <p className="text-[10px] text-green-500 flex items-center gap-1 mt-0.5">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                  {activeChat.workingBy?.length || 1} members active
-                </p>
+
+              <div className="hidden md:flex -space-x-2 mr-2">
+                {getAvatarInitials(activeChat.workingBy || []).slice(0, 3).map((initial, i) => (
+                  <div key={i} className="w-7 h-7 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-gray-300">
+                    {initial}
+                  </div>
+                ))}
+                {(activeChat.workingBy?.length || 0) > 3 && (
+                  <div className="w-7 h-7 rounded-full border-2 border-[#0a0a0a] bg-zinc-900 flex items-center justify-center text-[9px] font-bold text-gray-500">
+                    +{(activeChat.workingBy?.length || 0) - 3}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-3 text-gray-400 shrink-0">
-                <Phone onClick={() => setIsCalling('audio')} className="w-4 h-4 hover:text-white cursor-pointer transition hidden sm:block" />
-                <Video onClick={() => setIsCalling('video')} className="w-4 h-4 hover:text-white cursor-pointer transition hidden sm:block" />
+
+              <div className="flex items-center gap-1 sm:gap-2 text-gray-400 shrink-0 border-l border-zinc-800 pl-4">
+                <button
+                  onClick={() => setIsMeetupModalOpen(true)}
+                  className="p-1.5 hover:bg-zinc-800 hover:text-purple-400 rounded-md transition"
+                  title="Schedule Meetup"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-0.5 sm:gap-1 bg-zinc-900/50 rounded-lg p-0.5 border border-zinc-800/50">
+                  <button
+                    onClick={() => setIsCalling('audio')}
+                    className="p-1.5 hover:bg-zinc-800 hover:text-blue-400 rounded-md transition"
+                    title="Audio Call"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsCalling('video')}
+                    className="p-1.5 hover:bg-zinc-800 hover:text-blue-400 rounded-md transition"
+                    title="Video Call"
+                  >
+                    <Video className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="w-[1px] h-4 bg-zinc-800 mx-1" />
 
                 <button
                   onClick={handleSummarizeChat}
                   disabled={isSummarizing || chatMessages.length === 0}
                   className="p-1.5 hover:bg-amber-500/10 hover:text-amber-400 rounded-md transition disabled:opacity-50"
-                  title="✨ AI Summarize Chat"
+                  title="Summarize"
                 >
                   <Sparkles className={`w-4 h-4 ${isSummarizing ? 'animate-pulse text-amber-500' : ''}`} />
                 </button>
 
                 <button
-                  onClick={() => setIsMeetupModalOpen(true)}
-                  className="p-1.5 hover:bg-purple-500/10 hover:text-purple-400 rounded-md transition"
-                  title="Schedule Physical Meetup"
-                >
-                  <CalendarPlus className="w-4 h-4" />
-                </button>
-
-                <button
                   onClick={() => setIsChatExpanded(!isChatExpanded)}
-                  className="p-1.5 hover:bg-zinc-800 hover:text-white rounded-md transition"
-                  title={isChatExpanded ? "Collapse Chat" : "Expand Chat"}
+                  className="p-1.5 hover:bg-zinc-800 hover:text-white rounded-md transition hidden sm:block"
                 >
                   {isChatExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-
-                <button
-                  onClick={handleLeaveGroup}
-                  className="p-1.5 hover:bg-red-500/10 hover:text-red-500 rounded-md transition"
-                  title="Leave Group"
-                >
-                  <LogOut className="w-4 h-4" />
                 </button>
 
                 <button
@@ -1241,33 +1486,77 @@ export default function CampusPage() {
                     setIsChatExpanded(false);
                     setIsCalling(false);
                   }}
-                  className="p-1.5 hover:bg-zinc-800 hover:text-white rounded-md transition ml-1"
+                  className="p-1.5 hover:bg-zinc-800 hover:text-white rounded-md transition"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Pinned Notice */}
-            <div className="bg-[#00d0e6]/10 border-b border-[#00d0e6]/20 px-4 py-2.5 flex items-start gap-2 shrink-0">
-              <span className="text-[#00d0e6] text-xs pt-0.5">📌</span>
-              <p className="text-xs text-[#00d0e6] font-medium leading-relaxed">
-                Stay respectful in the chat. Focus on finding solutions for "{activeChat.title}".
-              </p>
+            {/* Pinned Problem Card (Replaces banner) */}
+            <div className={`bg-gradient-to-b from-[#111] to-[#0a0a0a] border-b border-zinc-900 transition-all duration-300 overflow-hidden ${isProblemVisible ? 'max-h-[300px] py-4 shadow-2xl' : 'max-h-[58px] py-3'}`}>
+              <div className="px-4 flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="flex-shrink-0 w-2 h-2 bg-yellow-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(234,179,8,0.5)]"></span>
+                    <h4 className="text-xs font-bold text-white transition-all truncate">Active Problem</h4>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter ${
+                      activeChat.status === "solved" ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
+                    }`}>
+                      {activeChat.status}
+                    </span>
+                  </div>
+                  
+                  {isProblemVisible ? (
+                    <p className="text-[12px] text-gray-400 leading-relaxed font-sans">{activeChat.description}</p>
+                  ) : (
+                    <p className="text-[11px] text-gray-500 truncate">{activeChat.title}</p>
+                  )}
+                </div>
+
+                {userId === activeChat.creatorId && activeChat.status !== "solved" && (
+                  <button
+                    onClick={() => {
+                      setProblemToSolve({ id: activeChat.id, alias: activeChat.alias });
+                      setIsSolutionModalOpen(true);
+                    }}
+                    className="shrink-0 bg-white text-black text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors shadow-lg shadow-white/5 active:scale-95"
+                  >
+                    Mark as Solved
+                  </button>
+                )}
+              </div>
+              
+              {isProblemVisible && (
+                <div className="px-4 mt-4 pt-4 border-t border-zinc-900/50 flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-[10px] text-gray-500">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="w-3 h-3" /> {activeChat.workingBy?.length || 0} builders
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <ThumbsUp className="w-3 h-3" /> {activeChat.votes || 0} upvotes
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-600">
+                    Posted by {activeChat.alias}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Messages or Call Area */}
-            <div 
-              className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 bg-[#060606] min-h-0 relative scroll-smooth"
-              onScroll={(e) => {
-                const target = e.target as HTMLDivElement;
-                if (target.scrollHeight - target.scrollTop - target.clientHeight > 150) {
-                  setShowScrollBottom(true);
-                } else {
-                  setShowScrollBottom(false);
-                }
-              }}
-            >
+            {/* Messages Area & Member List */}
+            <div className="flex-1 flex overflow-hidden min-h-0 relative">
+              <div 
+                className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 bg-[#060606] scroll-smooth"
+                onScroll={(e) => {
+                  const target = e.target as HTMLDivElement;
+                  if (target.scrollHeight - target.scrollTop - target.clientHeight > 150) {
+                    setShowScrollBottom(true);
+                  } else {
+                    setShowScrollBottom(false);
+                  }
+                }}
+              >
               {isCalling ? (
                 <div className="absolute inset-0 z-10 bg-[#060606]/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 pb-20">
                   <div className="w-full max-w-sm bg-[#111] border border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center relative">
@@ -1339,18 +1628,28 @@ export default function CampusPage() {
                   </div>
                 ) : (
                   chatMessages.map((msg) => {
+                    if (msg.type === 'system') {
+                      return (
+                        <div key={msg.id} className="flex justify-center my-4">
+                          <span className="text-[10px] sm:text-xs text-zinc-500 bg-zinc-900 px-3 py-1 rounded-full border border-zinc-800/50 italic tracking-wide">
+                            {msg.text}
+                          </span>
+                        </div>
+                      );
+                    }
+
                     const isMine = msg.senderId === userId;
                     const isImage = msg.fileUrl && msg.fileType?.startsWith('image/');
 
                     return (
                       <div key={msg.id} className={`flex flex-col mb-4 group relative ${isMine ? 'items-end ml-auto' : 'items-start mr-auto'} max-w-[85%] min-w-0`}>
                         {!isMine && (
-                          <div className="flex items-center gap-2 mb-1.5 ml-1">
-                            <div className="w-6 h-6 rounded-full bg-pink-600 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
+                          <Link href={`/profile/${msg.senderId}`} className="flex items-center gap-2 mb-1.5 ml-1 group/author">
+                            <div className="w-6 h-6 rounded-full bg-pink-600 flex items-center justify-center text-[9px] font-bold text-white shrink-0 group-hover/author:scale-110 transition-transform shadow-lg shadow-pink-900/20">
                               {msg.senderName.substring(0, 2).toUpperCase()}
                             </div>
-                            <span className="text-[11px] font-semibold text-[#00d0e6]">{msg.senderName}</span>
-                          </div>
+                            <span className="text-[11px] font-semibold text-gray-400 group-hover/author:text-white transition-colors">{msg.senderName}</span>
+                          </Link>
                         )}
 
                         <div className="relative group/msg inline-flex max-w-full">
@@ -1377,15 +1676,15 @@ export default function CampusPage() {
                             )}
                           </div>
 
-                          <div className={`rounded-2xl shadow-sm ${isMine
-                            ? 'bg-[#00d0e6] text-black rounded-tr-sm font-medium'
-                            : 'bg-[#1a1a1a] text-gray-200 rounded-tl-sm border border-zinc-800'
-                            } ${isImage ? 'p-1' : 'p-3 text-[13px] leading-relaxed'} overflow-hidden break-words max-w-full relative`}>
+                          <div className={`rounded-2xl shadow-lg border transition-all ${isMine
+                            ? 'bg-gradient-to-br from-[#f01c7d] to-[#7c3aed] text-white rounded-tr-sm font-medium border-pink-400/20'
+                            : 'bg-gradient-to-br from-[#1a1a1a] to-[#111] text-gray-200 rounded-tl-sm border-zinc-800'
+                            } ${isImage ? 'p-1' : 'px-4 py-3 text-[13px] leading-relaxed'} overflow-hidden break-words max-w-full relative shadow-black/40`}>
                             
                             {/* Reply Reference Bubble */}
                             {msg.replyTo && (
-                              <div className={`mb-2 p-2 rounded-lg text-[11px] ${isMine ? 'bg-black/10 text-black/80' : 'bg-black/30 text-gray-400'} border-l-2 ${isMine ? 'border-black/30' : 'border-[#00d0e6]'}`}>
-                                <div className={`font-bold mb-0.5 ${isMine ? 'text-black' : 'text-[#00d0e6]'}`}>{msg.replyTo.sender}</div>
+                              <div className={`mb-2 p-2 rounded-lg text-[11px] ${isMine ? 'bg-black/20 text-white/80' : 'bg-black/30 text-gray-400'} border-l-2 ${isMine ? 'border-white/30' : 'border-pink-500'}`}>
+                                <div className={`font-bold mb-0.5 ${isMine ? 'text-white' : 'text-pink-400'}`}>{msg.replyTo.sender}</div>
                                 <div className="truncate max-w-[200px] opacity-90">{msg.replyTo.text}</div>
                               </div>
                             )}
@@ -1408,7 +1707,7 @@ export default function CampusPage() {
                             )}
                           </div>
                         </div>
-                        <span className="text-[9px] text-gray-500 mt-1 px-1">
+                        <span className={`text-[9px] text-gray-500 mt-1 px-1 transition-opacity duration-300 opacity-0 group-hover:opacity-100`}>
                           {formatTime(msg.createdAt)}
                         </span>
                       </div>
@@ -1416,7 +1715,92 @@ export default function CampusPage() {
                   })
                 )
               )}
-              {!isCalling && <div ref={messagesEndRef} />}
+              <div ref={messagesEndRef} />
+            </div>
+
+              {/* Member List Panel */}
+              <div className={`transition-all duration-300 border-l border-zinc-900 bg-[#0a0a0a] overflow-y-auto shrink-0 ${isMemberListOpen ? 'w-[200px] sm:w-[240px]' : 'w-0'}`}>
+                <div className="p-4 pt-6">
+                  <div className="flex items-center justify-between mb-6 px-1">
+                    <h4 className="text-[11px] font-bold text-gray-400 font-mono uppercase tracking-widest">Workspace</h4>
+                    <button onClick={() => setIsMemberListOpen(false)} className="lg:hidden text-gray-500 hover:text-white">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Role: Problem Poster */}
+                    <div>
+                      <h5 className="text-[10px] text-zinc-600 font-bold mb-3 px-1 uppercase tracking-tighter italic">Problem Poster</h5>
+                      <div className="space-y-2">
+                        {(() => {
+                          const poster = campusUsers.find(u => u.id === activeChat.creatorId);
+                          if (poster && poster.status === 'online') {
+                            return (
+                              <Link href={`/profile/${poster.id}`} className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-zinc-900/50 transition group/item">
+                                <div className="relative">
+                                  <div className="w-7 h-7 rounded-full bg-cyan-600 flex items-center justify-center text-[10px] font-bold text-white uppercase group-hover/item:scale-105 transition-transform">
+                                    {poster.alias.charAt(0)}
+                                  </div>
+                                  <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-[#0a0a0a]"></div>
+                                </div>
+                                <span className="text-xs font-medium text-gray-300 truncate group-hover/item:text-white transition-colors">{poster.alias}</span>
+                              </Link>
+                            );
+                          }
+                          return <div className="text-[10px] text-zinc-700 italic px-1">Offline</div>;
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Role: Builder (Solver) */}
+                    {(() => {
+                      const solverId = activeChat.solverId;
+                      const solver = campusUsers.find(u => u.id === solverId);
+                      if (solver && solver.status === 'online') {
+                        return (
+                          <div>
+                            <h5 className="text-[10px] text-zinc-600 font-bold mb-3 px-1 uppercase tracking-tighter italic">Builder</h5>
+                            <div className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-zinc-900/50 transition">
+                              <div className="w-7 h-7 rounded-full bg-pink-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
+                                { solver.alias.charAt(0) }
+                              </div>
+                              <span className="text-xs font-medium text-gray-300 truncate">{solver.alias}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Role: Collaborators */}
+                    <div>
+                      <h5 className="text-[10px] text-zinc-600 font-bold mb-3 px-1 uppercase tracking-tighter italic">Collaborators (Online)</h5>
+                      <div className="space-y-2">
+                        {(() => {
+                          const onlineCollaborators = (activeChat.workingBy || [])
+                            .filter((id: string) => id !== activeChat.creatorId && id !== activeChat.solverId)
+                            .map((id: string) => campusUsers.find(u => u.id === id))
+                            .filter((u: any) => u && u.status === 'online');
+
+                          if (onlineCollaborators.length === 0) {
+                            return <div className="text-[10px] text-zinc-700 italic px-1">No collaborators online</div>;
+                          }
+
+                          return onlineCollaborators.map((user: any) => (
+                            <div key={user.id} className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-zinc-900/50 transition group/mem">
+                              <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-gray-400 group-hover/mem:text-white transition uppercase">
+                                {user.alias.charAt(0)}
+                              </div>
+                              <span className="text-xs font-medium text-gray-400 group-hover/mem:text-gray-200 truncate transition">{user.alias}</span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Input Area */}
@@ -1484,33 +1868,26 @@ export default function CampusPage() {
               
               <div className="p-4">
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2 relative">
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileUpload} 
-                  className="hidden" 
-                />
-                <button 
-                  type="button" 
-                  disabled={!!isCalling || isUploading} 
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`p-2 text-gray-500 hover:text-white transition rounded-full hover:bg-zinc-800 shrink-0 disabled:opacity-50 disabled:hover:bg-transparent ${isUploading ? 'animate-pulse text-cyan-400' : ''}`}
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <input
-                  type="text"
-                  ref={textInputRef}
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder={isCalling ? "Text chat paused during call..." : "Type a message..."}
-                  disabled={!!isCalling}
-                  className="flex-1 bg-[#1a1a1a] text-sm text-white rounded-full px-4 py-2.5 outline-none border border-zinc-800 focus:border-[#00d0e6] transition-colors disabled:opacity-50"
-                />
+                <div className="flex-1 relative group">
+                  <input
+                    type="text"
+                    ref={textInputRef}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder={isCalling ? "Text chat paused during call..." : "Type a message..."}
+                    disabled={!!isCalling}
+                    className="w-full bg-[#1a1a1a] text-sm text-white rounded-full px-4 py-2.5 outline-none border border-zinc-800 focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all disabled:opacity-50"
+                  />
+                  {newMessage.length > 0 && (
+                    <span className={`absolute right-4 -top-6 text-[10px] font-mono ${newMessage.length > 500 ? 'text-red-500' : 'text-gray-500'} transition-opacity`}>
+                      {newMessage.length}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="submit"
                   disabled={!!isCalling || (!newMessage.trim() && !pendingAttachment?.url)}
-                  className="p-2.5 bg-[#f01c7d] hover:bg-[#d81970] disabled:opacity-50 disabled:hover:bg-[#f01c7d] text-white rounded-full transition shrink-0 shadow-lg shadow-pink-900/20"
+                  className="p-2.5 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 text-white rounded-full transition-all shrink-0 shadow-lg shadow-purple-900/20"
                 >
                   <Send className="w-4 h-4 ml-0.5" />
                 </button>
@@ -1538,58 +1915,149 @@ export default function CampusPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Problem Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Cab prices from campus are too high"
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white placeholder:text-zinc-600 transition-colors text-sm"
-                />
+            <div className="p-6">
+              {/* Stepper Indicator */}
+              <div className="flex items-center justify-between mb-8 px-2">
+                {[1, 2, 3].map((s) => (
+                  <div key={s} className="flex items-center flex-1 last:flex-none">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${guidedStep >= s ? 'bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] text-white shadow-[0_0_15px_rgba(240,28,125,0.4)]' : 'bg-zinc-800 text-zinc-500'}`}>
+                      {s}
+                    </div>
+                    {s < 3 && (
+                      <div className={`flex-1 h-[2px] mx-2 rounded-full transition-all duration-500 ${guidedStep > s ? 'bg-gradient-to-r from-[#f01c7d] to-[#7c3aed]' : 'bg-zinc-800'}`} />
+                    )}
+                  </div>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Explain your problem in detail... What's happening?"
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none h-32 text-white placeholder:text-zinc-600 resize-none transition-colors text-sm"
-                />
+              <div className="space-y-6 min-h-[300px] flex flex-col justify-center">
+                {guidedStep === 1 && (
+                  <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                    <label className="block text-[10px] font-black text-zinc-500 mb-4 uppercase tracking-[0.2em]">Step 1: The Core Issue</label>
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2">What's the problem?</label>
+                        <input
+                          type="text"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          placeholder="e.g. Broken elevator in Block B"
+                          className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white placeholder:text-zinc-700 transition-all text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2">Category</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {CATEGORIES.filter(c => c.name !== 'All Problems' && c.name !== 'Hall of Fame').slice(0, 6).map(cat => (
+                            <button
+                              key={cat.name}
+                              onClick={() => setNewPostCategory(cat.name)}
+                              className={`px-3 py-2.5 rounded-xl border text-[11px] font-bold transition-all flex items-center gap-2 ${newPostCategory === cat.name ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400' : 'bg-zinc-900/30 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                            >
+                              <cat.icon className="w-3.5 h-3.5" />
+                              {cat.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {guidedStep === 2 && (
+                  <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                    <label className="block text-[10px] font-black text-zinc-500 mb-4 uppercase tracking-[0.2em]">Step 2: Impact & Details</label>
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2">Describe it in detail (min 80 chars)</label>
+                        <textarea
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          placeholder="Explain exactly what happens, where it is, and why it's a priority..."
+                          className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none h-32 text-white placeholder:text-zinc-700 resize-none transition-all text-sm leading-relaxed"
+                        />
+                        <div className="flex justify-between mt-2">
+                          <span className={`text-[10px] font-bold ${description.length >= 80 ? 'text-green-500' : 'text-zinc-600'}`}>
+                            {description.length} / 80 characters
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2">Who does it affect?</label>
+                        <input
+                          type="text"
+                          value={audience}
+                          onChange={(e) => setAudience(e.target.value)}
+                          placeholder="e.g. All Block B students, morning commuters"
+                          className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white placeholder:text-zinc-700 transition-all text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {guidedStep === 3 && (
+                  <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                    <label className="block text-[10px] font-black text-zinc-500 mb-4 uppercase tracking-[0.2em]">Step 3: Call to Action</label>
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-4">What kind of builders do you need?</label>
+                        <div className="flex flex-col gap-3">
+                          {[
+                            { id: 'developer', label: 'Developers', desc: 'To build the logic and functionality' },
+                            { id: 'designer', label: 'Designers', desc: 'To craft the look and experience' },
+                            { id: 'both', label: 'Both / Full Team', desc: 'A complete team to handle everything' }
+                          ].map((type) => (
+                            <button
+                              key={type.id}
+                              onClick={() => setHelpNeeded(type.id as any)}
+                              className={`p-4 rounded-2xl border text-left transition-all ${helpNeeded === type.id ? 'bg-cyan-500/10 border-cyan-500' : 'bg-zinc-900/30 border-zinc-800 hover:border-zinc-700'}`}
+                            >
+                              <div className={`text-xs font-bold mb-1 ${helpNeeded === type.id ? 'text-cyan-400' : 'text-gray-300'}`}>{type.label}</div>
+                              <div className="text-[10px] text-zinc-500">{type.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Category 📌</label>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORIES.filter(c => c.name !== 'All Problems' && c.name !== 'Hall of Fame').map(cat => (
-                    <button
-                      key={cat.name}
-                      onClick={() => setNewPostCategory(cat.name)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${newPostCategory === cat.name ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-[#0a0a0a] border-zinc-800 text-gray-400 hover:border-zinc-700'}`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={handleSubmit}
-                  disabled={isAnalyzing}
-                  className="w-full bg-[#f01c7d] hover:bg-[#d81970] disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(219,39,119,0.3)] transition-all flex justify-center items-center gap-2 text-sm"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Sparkles className="w-4 h-4 animate-pulse text-yellow-300" />
-                      AI Checking Duplicates...
-                    </>
-                  ) : (
-                    "Submit Problem"
-                  )}
-                </button>
+              <div className="pt-8 flex gap-3">
+                {guidedStep > 1 && (
+                  <button
+                    onClick={() => setGuidedStep(prev => prev - 1)}
+                    className="px-6 py-3.5 rounded-xl bg-zinc-900 text-zinc-400 font-bold text-xs hover:text-white transition-all border border-zinc-800"
+                  >
+                    Back
+                  </button>
+                )}
+                
+                {guidedStep < 3 ? (
+                  <button
+                    onClick={() => setGuidedStep(prev => prev + 1)}
+                    disabled={guidedStep === 1 ? !title.trim() : (guidedStep === 2 ? description.length < 80 : false)}
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center gap-2 text-xs border border-zinc-700"
+                  >
+                    Next Step <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isAnalyzing}
+                    className="flex-1 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:from-[#d81970] hover:to-[#6d28d9] disabled:opacity-75 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(219,39,119,0.3)] transition-all flex justify-center items-center gap-2 text-sm uppercase tracking-widest"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Sparkles className="w-4 h-4 animate-pulse text-yellow-300" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      "Post Problem 🚀"
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1598,54 +2066,105 @@ export default function CampusPage() {
 
       {/* Schedule Meetup Modal */}
       {isMeetupModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#111111] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-5 border-b border-zinc-800">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2 tracking-tight">
-                Schedule Meetup 📅
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111111] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-zinc-900 bg-[#0c0c0c]">
+              <h2 className="text-lg font-black text-white flex items-center gap-2 tracking-tight uppercase">
+                <CalendarPlus className="w-5 h-5 text-pink-500" /> Plan a Meetup
               </h2>
               <button
                 onClick={() => setIsMeetupModalOpen(false)}
-                className="text-gray-500 hover:text-white transition-colors bg-zinc-800/50 hover:bg-zinc-700/50 p-1.5 rounded-lg"
+                className="text-gray-500 hover:text-white transition-colors bg-zinc-800/30 p-1.5 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Date</label>
-                <input
-                  type="date"
-                  value={meetupDate}
-                  onChange={(e) => setMeetupDate(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white transition-colors text-sm [color-scheme:dark]"
-                />
+            
+            <div className="flex flex-col h-[500px]">
+              <div className="flex-1 p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-0.5">Meetup Title</label>
+                  <input
+                    type="text"
+                    value={meetupTitle}
+                    onChange={(e) => setMeetupTitle(e.target.value)}
+                    placeholder="e.g. Cab Sharing to Airport"
+                    className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-pink-500 outline-none text-white placeholder:text-zinc-700 transition-colors text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-0.5">Link to Problem</label>
+                  <select
+                    value={meetupProblemId}
+                    onChange={(e) => setMeetupProblemId(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-pink-500 outline-none text-white text-sm cursor-pointer appearance-none"
+                  >
+                    <option value="">Select a challenge...</option>
+                    {problems.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-0.5">Date</label>
+                    <input
+                      type="date"
+                      value={meetupDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setMeetupDate(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-pink-500 outline-none text-white text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-0.5">Time</label>
+                    <input
+                      type="time"
+                      value={meetupTime}
+                      min={meetupDate === new Date().toISOString().split('T')[0] ? new Date().toTimeString().slice(0, 5) : undefined}
+                      onChange={(e) => setMeetupTime(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-pink-500 outline-none text-white text-xs [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-gray-300">Max Attendees</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">Limit joiners (empty for ∞)</p>
+                  </div>
+                  <input 
+                    type="number"
+                    min="1"
+                    value={maxAttendees || ""}
+                    onChange={(e) => setMaxAttendees(e.target.value ? parseInt(e.target.value) : null)}
+                    placeholder="∞"
+                    className="w-16 h-10 bg-black border border-zinc-800 rounded-lg text-center text-sm text-pink-500 font-bold outline-none focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-0.5">Meeting Point Name</label>
+                  <input
+                    type="text"
+                    value={meetupLocation}
+                    onChange={(e) => setMeetupLocation(e.target.value)}
+                    placeholder="e.g. Ground Floor Stairs, Lift Lobby"
+                    className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-pink-500 outline-none text-white placeholder:text-zinc-700 transition-colors text-sm"
+                  />
+                </div>
+
+                <div className="mt-6 flex gap-2">
+                   <button
+                    onClick={handleScheduleMeetup}
+                    className="w-full py-4 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:from-[#d81970] hover:to-[#6d28d9] text-white font-black rounded-xl shadow-lg transition-all text-xs uppercase tracking-widest"
+                  >
+                    Confirm Meetup
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Time</label>
-                <input
-                  type="time"
-                  value={meetupTime}
-                  onChange={(e) => setMeetupTime(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white transition-colors text-sm [color-scheme:dark]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">Location</label>
-                <input
-                  type="text"
-                  value={meetupLocation}
-                  onChange={(e) => setMeetupLocation(e.target.value)}
-                  placeholder="e.g. Food Court"
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none text-white placeholder:text-zinc-600 transition-colors text-sm"
-                />
-              </div>
-              <button
-                onClick={handleScheduleMeetup}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all flex justify-center items-center gap-2 text-sm mt-2"
-              >
-                Confirm Meetup
-              </button>
             </div>
           </div>
         </div>
@@ -1653,42 +2172,163 @@ export default function CampusPage() {
 
       {/* View Calendar Full Modal */}
       {isCalendarOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#111111] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-h-[500px] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">
-                Upcoming Meetups 📅
-              </h2>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111111] border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 h-[600px] flex flex-col">
+            <div className="p-6 border-b border-zinc-900 flex items-center justify-between bg-[#111]">
+              <div className="flex bg-zinc-900/50 p-1 rounded-xl">
+                <button 
+                  onClick={() => setMeetupTab('upcoming')}
+                  className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${meetupTab === 'upcoming' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-gray-300'}`}
+                >
+                  Upcoming
+                </button>
+                <button 
+                  onClick={() => setMeetupTab('past')}
+                  className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${meetupTab === 'past' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-gray-300'}`}
+                >
+                  Archive
+                </button>
+              </div>
               <button
                 onClick={() => setIsCalendarOpen(false)}
-                className="text-gray-500 hover:text-white transition-colors bg-zinc-800/50 hover:bg-zinc-700/50 p-1.5 rounded-lg"
+                className="text-gray-400 hover:text-white transition-colors bg-white/5 p-2 rounded-xl"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {meetups.length === 0 ? (
-                <div className="text-center py-20">
-                  <p className="text-gray-400">No meetups scheduled yet.</p>
-                </div>
-              ) : (
-                meetups.map((m: any) => (
-                  <div key={m.id} className="bg-[#0a0a0a] border-l-[3px] border-l-cyan-500 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <h4 className="text-sm font-bold text-white mb-1.5">{m.problemTitle}</h4>
-                      <p className="text-xs text-gray-400 flex items-center gap-2">
-                        <span className="bg-zinc-800 px-2 py-1 rounded text-gray-300">📍 {m.location}</span>
-                        <span className="text-cyan-400">Organized by {m.creatorAlias}</span>
-                      </p>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              {(() => {
+                const now = new Date();
+                const filtered = meetups.filter(m => {
+                  const mDate = new Date(`${m.date}T${m.time || '00:00'}`);
+                  return meetupTab === 'upcoming' ? mDate >= now : mDate < now;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-4">
+                      <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center">
+                        <CalendarIcon className="w-10 h-10 text-zinc-700" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-white font-bold">No {meetupTab} meetups</h3>
+                        <p className="text-xs text-zinc-500 max-w-[200px]">Create one from any problem chat to solve things together!</p>
+                      </div>
+                      <button 
+                        onClick={() => { setIsCalendarOpen(false); setIsMeetupModalOpen(true); }}
+                        className="py-2.5 px-6 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] text-white text-[11px] font-black uppercase rounded-full shadow-lg"
+                      >
+                        Plan First Meetup
+                      </button>
                     </div>
-                    <div className="bg-[#111] border border-zinc-800 rounded-lg px-4 py-2 text-center shrink-0">
-                      <div className="text-sm font-bold text-white">{new Date(m.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</div>
-                      <div className="text-xs text-cyan-400">{m.time}</div>
+                  );
+                }
+
+                return filtered.map((m: any) => {
+                  const isAttendee = m.attendees?.includes(userId);
+                  const isCreator = m.creatorId === userId;
+                  const canPostOutcome = meetupTab === 'past' && isCreator && !m.outcome;
+
+                  // Dynamic style based on Category
+                  let borderClass = "border-l-cyan-500";
+                  let bgClass = "bg-cyan-500/5";
+                  let Icon = CalendarIcon;
+                  let textColor = "text-cyan-400";
+                  
+                  if (m.category === 'Cab') {
+                    borderClass = "border-l-purple-500"; bgClass = "bg-purple-500/5"; Icon = Car; textColor = "text-purple-400";
+                  } else if (m.category === 'Academics' || m.category === 'Exam') {
+                    borderClass = "border-l-yellow-500"; bgClass = "bg-yellow-500/5"; Icon = Book; textColor = "text-yellow-400";
+                  } else if (m.category === 'Food') {
+                    borderClass = "border-l-pink-500"; bgClass = "bg-pink-500/5"; Icon = Utensils; textColor = "text-pink-400";
+                  }
+
+                  return (
+                    <div key={m.id} className={`bg-[#0a0a0a] border border-zinc-900 rounded-2xl overflow-hidden border-l-4 ${borderClass} transition-all hover:bg-white/[0.02]`}>
+                      <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                             <div className={`p-1.5 rounded-lg ${bgClass} ${textColor}`}>
+                              <Icon className="w-3.5 h-3.5" />
+                             </div>
+                             <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>{m.title}</span>
+                          </div>
+                          <h4 className="text-sm font-bold text-white mb-3 truncate">{m.problemTitle}</h4>
+                          <div className="flex flex-wrap gap-3 items-center">
+                            <span className="text-[11px] text-gray-500 flex items-center gap-1.5 bg-zinc-900/50 px-2 py-1 rounded-lg">
+                              <MapPin className="w-3 h-3" /> {m.location}
+                            </span>
+                            <div className="flex items-center -space-x-2">
+                              {m.attendees?.slice(0, 3).map((at: string, idx: number) => (
+                                <div key={idx} className="w-6 h-6 rounded-full bg-zinc-800 border-2 border-black flex items-center justify-center text-[8px] font-black text-white">
+                                  {idx + 1}
+                                </div>
+                              ))}
+                              {m.attendees?.length > 3 && (
+                                <div className="w-6 h-6 rounded-full bg-zinc-900 border-2 border-black flex items-center justify-center text-[8px] font-black text-gray-500">
+                                  +{m.attendees.length - 3}
+                                </div>
+                              )}
+                              <span className="text-[10px] text-zinc-500 ml-3 font-bold">{m.attendees?.length || 0} {m.maxAttendees ? `/ ${m.maxAttendees}` : ''} joining</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-row md:flex-col items-center gap-4">
+                          <div className="bg-[#111] border border-zinc-800 rounded-2xl px-5 py-3 text-center min-w-[100px] shadow-xl">
+                            <div className="text-xs font-black text-gray-500 uppercase tracking-tighter mb-0.5">
+                              {new Date(m.date).toLocaleDateString([], { month: 'short' })}
+                            </div>
+                            <div className="text-2xl font-black text-white leading-none">
+                              {new Date(m.date).toLocaleDateString([], { day: 'numeric' })}
+                            </div>
+                            <div className={`text-[10px] font-bold mt-1.5 ${textColor}`}>{m.time}</div>
+                          </div>
+
+                          {meetupTab === 'upcoming' ? (
+                            <button 
+                              onClick={() => handleJoinMeetup(m.id, m.attendees)}
+                              className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isAttendee ? 'bg-zinc-800 text-zinc-400 border border-zinc-700' : 'bg-white text-black hover:bg-gray-200'}`}
+                            >
+                              {isAttendee ? 'Joined ✓' : 'Join'}
+                            </button>
+                          ) : (
+                             m.outcome ? (
+                               <div className="px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full flex items-center gap-1.5">
+                                 <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                 <span className="text-[9px] font-black text-green-400 uppercase">Solved</span>
+                               </div>
+                             ) : isCreator && (
+                               <button 
+                                 onClick={() => {
+                                   const text = prompt("What did you build or decide in this meetup?");
+                                   if (text) handlePostOutcome(m.id, text);
+                                 }}
+                                 className="py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg shadow-cyan-900/40"
+                               >
+                                 Post Outcome
+                               </button>
+                             )
+                          )}
+                        </div>
+                      </div>
+                      
+                      {m.outcome && (
+                        <div className="px-5 pb-5 pt-0 border-t border-zinc-900/50 mt-1">
+                          <div className="bg-zinc-900/30 p-3 rounded-xl border border-zinc-800/50">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <Sparkles className="w-3 h-3 text-yellow-500" />
+                              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Meetup Outcome</span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 leading-relaxed italic">"{m.outcome}"</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
-              )}
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -1836,7 +2476,7 @@ export default function CampusPage() {
           <div className="bg-[#111111] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800">
               <h2 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">
-                Share Solution 🏆
+                Solution Built 🏆
               </h2>
               <button
                 onClick={() => { setIsSolutionModalOpen(false); setSolutionText(""); }}
@@ -1847,18 +2487,26 @@ export default function CampusPage() {
             </div>
             <div className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5">How did you solve this?</label>
-                <textarea
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Deployed Project Link / Final URL</label>
+                <input
+                  type="text"
                   value={solutionText}
                   onChange={(e) => setSolutionText(e.target.value)}
-                  placeholder="Explain the solution clearly so others can learn from it..."
-                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-green-500 outline-none h-32 text-white placeholder:text-zinc-600 resize-none transition-colors text-sm"
+                  placeholder="https://your-project-link.com"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-green-500 outline-none text-white placeholder:text-zinc-600 transition-colors text-sm mb-4"
                 />
+                
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-xs text-green-400 flex items-start gap-2">
+                    <span className="text-lg leading-none">💡</span>
+                    <span>By marking this solved, you will be permanently credited as the builder for this problem on your profile. Awesome job closing the loop!</span>
+                  </p>
+                </div>
               </div>
               <div className="pt-2">
                 <button
                   onClick={handleMarkAsSolved}
-                  className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex justify-center items-center gap-2 text-sm"
+                  className="w-full bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:from-[#d81970] hover:to-[#6d28d9] text-white font-bold py-3.5 rounded-xl shadow-[0_0_20px_rgba(240,28,125,0.3)] transition-all flex justify-center items-center gap-2 text-sm hover:-translate-y-0.5"
                 >
                   Submit Solution & Mark Solved
                 </button>
