@@ -1450,6 +1450,14 @@ export default function CampusPage() {
                 </button>
 
                 <button
+                  onClick={handleLeaveGroup}
+                  className="p-1.5 hover:bg-red-500/10 hover:text-red-500 text-zinc-400 rounded-md transition"
+                  title="Leave Group"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+
+                <button
                   onClick={() => setIsChatExpanded(!isChatExpanded)}
                   className="p-1.5 hover:bg-zinc-800 hover:text-white rounded-md transition hidden sm:block"
                 >
