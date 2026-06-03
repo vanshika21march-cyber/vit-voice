@@ -1901,12 +1901,12 @@ export default function CampusPage() {
             <div className="p-6">
               {/* Stepper Indicator */}
               <div className="flex items-center justify-between mb-8 px-2">
-                {[1, 2, 3].map((s) => (
+                {[1, 2].map((s) => (
                   <div key={s} className="flex items-center flex-1 last:flex-none">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${guidedStep >= s ? 'bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] text-white shadow-[0_0_15px_rgba(240,28,125,0.4)]' : 'bg-zinc-800 text-zinc-500'}`}>
                       {s}
                     </div>
-                    {s < 3 && (
+                    {s < 2 && (
                       <div className={`flex-1 h-[2px] mx-2 rounded-full transition-all duration-500 ${guidedStep > s ? 'bg-gradient-to-r from-[#f01c7d] to-[#7c3aed]' : 'bg-zinc-800'}`} />
                     )}
                   </div>
@@ -1979,48 +1979,6 @@ export default function CampusPage() {
                   </div>
                 )}
 
-                {guidedStep === 3 && (
-                  <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                    <label className="block text-[10px] font-black text-zinc-500 mb-4 uppercase tracking-[0.2em]">Step 3: Call to Action</label>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-4">What kind of builders do you need?</label>
-                        <div className="flex flex-col gap-3">
-                          {(() => {
-                            if (['Internships', 'Career', 'Exams'].includes(newPostCategory)) {
-                              return [
-                                { id: 'mentor', label: 'Mentor', desc: "Someone who's been through it" },
-                                { id: 'peer', label: 'Peer', desc: "Someone going through the same thing" },
-                                { id: 'both', label: 'Both', desc: '' }
-                              ];
-                            }
-                            if (newPostCategory === 'Mental Health') {
-                              return [
-                                { id: 'listener', label: 'Listener', desc: "Someone to talk it through with" },
-                                { id: 'peer', label: 'Peer', desc: "Someone who relates" },
-                                { id: 'both', label: 'Both', desc: '' }
-                              ];
-                            }
-                            return [
-                              { id: 'developer', label: 'Developers', desc: 'To build the logic and functionality' },
-                              { id: 'designer', label: 'Designers', desc: 'To craft the look and experience' },
-                              { id: 'both', label: 'Both / Full Team', desc: 'A complete team to handle everything' }
-                            ];
-                          })().map((type) => (
-                            <button
-                              key={type.id}
-                              onClick={() => setHelpNeeded(type.id)}
-                              className={`p-4 rounded-2xl border text-left transition-all ${helpNeeded === type.id ? 'bg-cyan-500/10 border-cyan-500' : 'bg-zinc-900/30 border-zinc-800 hover:border-zinc-700'}`}
-                            >
-                              <div className={`text-xs font-bold mb-1 ${helpNeeded === type.id ? 'text-cyan-400' : 'text-gray-300'}`}>{type.label}</div>
-                              <div className="text-[10px] text-zinc-500">{type.desc}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="pt-8 flex gap-3">
@@ -2033,7 +1991,7 @@ export default function CampusPage() {
                   </button>
                 )}
                 
-                {guidedStep < 3 ? (
+                {guidedStep < 2 ? (
                   <button
                     onClick={() => setGuidedStep(prev => prev + 1)}
                     disabled={guidedStep === 1 ? !title.trim() : (guidedStep === 2 ? description.length < 80 : false)}
@@ -2044,7 +2002,7 @@ export default function CampusPage() {
                 ) : (
                   <button
                     onClick={handleSubmit}
-                    disabled={isAnalyzing}
+                    disabled={isAnalyzing || description.length < 80}
                     className="flex-1 bg-gradient-to-r from-[#f01c7d] to-[#7c3aed] hover:from-[#d81970] hover:to-[#6d28d9] disabled:opacity-75 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(219,39,119,0.3)] transition-all flex justify-center items-center gap-2 text-sm uppercase tracking-widest"
                   >
                     {isAnalyzing ? (
