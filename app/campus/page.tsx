@@ -1981,7 +1981,7 @@ export default function CampusPage() {
                         <textarea
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Explain exactly what happens, where it is, and why it's a priority..."
+                          placeholder="Describe your situation — what do you know, what confuses you, or where are you stuck? (No worries if you haven't tried anything yet)"
                           className="w-full px-4 py-3.5 rounded-xl bg-[#0a0a0a] border border-zinc-800 focus:border-cyan-500 outline-none h-32 text-white placeholder:text-zinc-700 resize-none transition-all text-sm leading-relaxed"
                         />
                         <div className="flex justify-between mt-2">
@@ -2011,11 +2011,27 @@ export default function CampusPage() {
                       <div>
                         <label className="block text-xs font-bold text-gray-400 mb-4">What kind of builders do you need?</label>
                         <div className="flex flex-col gap-3">
-                          {[
-                            { id: 'developer', label: 'Developers', desc: 'To build the logic and functionality' },
-                            { id: 'designer', label: 'Designers', desc: 'To craft the look and experience' },
-                            { id: 'both', label: 'Both / Full Team', desc: 'A complete team to handle everything' }
-                          ].map((type) => (
+                          {(() => {
+                            if (['Internships', 'Career', 'Exams'].includes(newPostCategory)) {
+                              return [
+                                { id: 'mentor', label: 'Mentor', desc: "Someone who's been through it" },
+                                { id: 'peer', label: 'Peer', desc: "Someone going through the same thing" },
+                                { id: 'both', label: 'Both', desc: '' }
+                              ];
+                            }
+                            if (newPostCategory === 'Mental Health') {
+                              return [
+                                { id: 'listener', label: 'Listener', desc: "Someone to talk it through with" },
+                                { id: 'peer', label: 'Peer', desc: "Someone who relates" },
+                                { id: 'both', label: 'Both', desc: '' }
+                              ];
+                            }
+                            return [
+                              { id: 'developer', label: 'Developers', desc: 'To build the logic and functionality' },
+                              { id: 'designer', label: 'Designers', desc: 'To craft the look and experience' },
+                              { id: 'both', label: 'Both / Full Team', desc: 'A complete team to handle everything' }
+                            ];
+                          })().map((type) => (
                             <button
                               key={type.id}
                               onClick={() => setHelpNeeded(type.id as any)}
