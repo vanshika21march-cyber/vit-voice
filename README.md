@@ -256,11 +256,11 @@ Please read `CONTRIBUTING.md` before submitting a PR.
 - [x] 🌌 Landing page with 3D grid and shooting stars
 - [x] 🎨 Dual-mode design system (Cyan / Pink)
 - [x] 🔥 Firebase Firestore live stats integration
-- [ ] 🕵️ Anonymous post system with karma voting
-- [ ] 🤖 AI study tool integration (Gemini API)
+- [x] 🕵️ Anonymous post system with karma voting
+- [x] 🤖 AI study tool integration (Gemini API)
 - [ ] 📱 Mobile-responsive layout pass
 - [ ] 🔔 Real-time notification system
-- [ ] 👥 Team formation for projects
+- [x] 👥 Team formation for projects
 
 <br/>
 
